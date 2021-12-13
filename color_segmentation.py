@@ -7,6 +7,7 @@ import argparse
 import cv2
 import os.path
 import copy
+import matplotlib.pyplot as plt
 
 # code from https://nrsyed.com/2018/03/29/image-segmentation-via-k-means-clustering-with-opencv-python/
 from typing import Dict
@@ -32,7 +33,10 @@ def app_get_arguments():
                     help='File extension for output image (default png)')
     ap.add_argument("-t", "--output-color", type=str, default='gray',
                     help="Output image color type: gray (default), rgb")
-
+    ap.add_argument("-v", "--verbose", action="store_true",
+                    help="Show debbuging info")
+    ap.add_argument("--show-results", type=str, default="false",
+                    help="Show resulting images in a window: false (default), gui")
     args = vars(ap.parse_args())
     return args
 
@@ -55,9 +59,10 @@ def process_args(args: dict):
         "output_format": (str) the file format which will be used if a output file is produced.
         "output_color_type": (str) used to specify wether the resulting Kmeans output image will be in grayscale or in RGB.
     """
-    app_memory = {"filename": str, "image": None, "orig": None, "width": int, "height": int, "color_space": str, "channels": str,
-                  "num_clusters": int, "output_file": bool, "output_format": str, "kmeans_res": None, "clustering": None,
-                  "labels": list, "output_color_type": str, "kmeans_image": None}
+    app_memory = {"filename": str, "image": None, "orig": None, "width": int, "height": int, "color_space": str,
+                  "channels": str, "num_clusters": int, "output_file": bool, "output_format": str, "kmeans_res": None,
+                  "clustering": None, "labels": list, "adjusted_labels": list, "output_color_type": str, "kmeans_image": None,
+                  "show_results": str, "verbose": bool}
     image = cv2.imread(args['image'])
     app_memory["filename"] = copy.copy(args['image'])
     app_memory["image"] = image
@@ -102,13 +107,20 @@ def process_args(args: dict):
     app_memory["channels"] = copy.copy(args["channels"])
 
     if args['num_clusters'] < 2:
-        print('Warning: num-clusters < 2 invalid. Using num-clusters = 2')
+        if args["verbose"]:
+            print('Warning: num-clusters < 2 invalid. Using num-clusters = 2')
     app_memory["num_clusters"] = max(2, args['num_clusters'])
 
     app_memory["output_color_type"] = copy.copy(args["output_color"].lower())
     app_memory["output_file"] = copy.copy(args["output_file"])
     app_memory["output_format"] = copy.copy(args['output_format'])
-
+    if args["show_results"] != "gui" or args["show_results"] != "false":
+        if args["verbose"]:
+            print("Warning: show-results value not valid. Not showing results option used per default")
+        app_memory["show_results"] = "false"
+    else:
+        app_memory["show_results"] = args["show_results"]
+    app_memory["verbose"] = args["verbose"]
     return app_memory
 
 
@@ -157,7 +169,6 @@ def kmeans_clustering(app_memory: dict):
 
 def create_kmeans_image(app_memory: dict):
     """
-
     :param app_memory: a dictionary with the following keys:
         "filename": (str) the filename of the original image.
         "image": (cv2 image) the converted image in the given color space.
@@ -192,18 +203,42 @@ def create_kmeans_image(app_memory: dict):
         # thus varying between red, green and blue
         gray = True if len(kmeans_image_shape) == 2 else False
         kmeansImage = np.zeros(kmeans_image_shape, dtype=np.uint8)
+        app_memory["adjusted_labels"] = []
         for i, label in enumerate(sorted_labels):
             a = int((255) / (num_clusters - 1)) * i
             if gray:
                 kmeansImage[app_memory["clustering"] == label] = a
+                app_memory["adjusted_labels"].append(a)
             else:
                 r = random.randint(0, 2)
                 b = [0, 0, 0]
                 b[r] = a
                 kmeansImage[app_memory["clustering"] == label] = b
+                app_memory["adjusted_labels"].append(b)
 
         app_memory["kmeans_image"] = kmeansImage
     _init_image(kmeans_image_shape)
+
+
+def show_spots_only_image(app_memory: dict):
+    adj_labs = app_memory["adjusted_labels"]
+    bin_img = app_memory["kmeans_image"].copy()
+    lab_chosen = 4
+    mycat = adj_labs[lab_chosen]
+    bin_img[np.where(bin_img!=mycat)] = 254
+    bin_img[np.where(bin_img==mycat)] = 255
+    bin_img[np.where(bin_img==254)] = 0
+
+    # plt.hist(bin_img)
+    # plt.plot()
+    # plt.show()
+
+    # cv2.imshow("binary", bin_img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    output_folder = "output_modified_images"
+    cv2.imwrite(os.path.join(output_folder, "test_binaire_"+ str(lab_chosen) + ".jpg"), bin_img)
 
 
 def output_results(app_memory: dict):
@@ -213,7 +248,7 @@ def output_results(app_memory: dict):
     concatImage = np.concatenate((orig,
                                   193 * np.ones((orig.shape[0], int(0.0625 * orig.shape[1]), 3), dtype=np.uint8),
                                   cv2.cvtColor(kmeans_image, cv2.COLOR_RGB2BGR)), axis=1)
-    cv2.imshow('Original vs clustered', concatImage)
+
     if app_memory['output_file']:
         # Construct output filename and write image to disk.
         file_extension = app_memory['output_format']
@@ -225,16 +260,30 @@ def output_results(app_memory: dict):
             os.mkdir(output_folder)
         final_filename = os.path.join(output_folder, filename)
         cv2.imwrite(final_filename, concatImage)
-        print(filename, output_folder)
-    cv2.waitKey(1000)
-    cv2.destroyAllWindows()
+        if app_memory["verbose"]:
+            print(filename, output_folder)
+    if app_memory["show_results"] == "gui":
+        if app_memory["verbose"]:
+            print("showing results")
+        cv2.imshow('Original vs clustered', concatImage)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    return app_memory
+
+
+def main(**kwargs):
+    if kwargs["verbose"]:
+        print("Color segmentation script - v1.0")
+        print(kwargs)
+    app_memory = process_args(kwargs)
+    kmeans_clustering(app_memory)
+    create_kmeans_image(app_memory)
+    output_results(app_memory)
+    show_spots_only_image(app_memory)
+
     return app_memory
 
 
 if __name__ == '__main__':
-    print("Color segmentation script - v1.0")
     args = app_get_arguments()
-    app_memory = process_args(args)
-    kmeans_clustering(app_memory)
-    create_kmeans_image(app_memory)
-    output_results(app_memory)
+    app_memory = main(**args)
