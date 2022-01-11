@@ -41,5 +41,6 @@ class Salamandre(keras.utils.Sequence):
         # print("x.shape: {} | min {} | max {}".format(x.shape, x.min(), x.max()))
         # print("y.shape: {} | min {} | max {}".format(y.shape, y.min(), y.max()))
         # Preprocessing step, for target where we have either 0 or 255 as value, we set 255 as 1
-        y[y > 1] = 1
+        x = x / 255
+        y = y / 255
         return x, y

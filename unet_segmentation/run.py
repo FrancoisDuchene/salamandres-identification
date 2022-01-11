@@ -1,6 +1,8 @@
 import os
 from os import path
 
+from tqdm import tqdm
+
 import keras
 import numpy as np
 from tensorflow.keras.callbacks import ModelCheckpoint
@@ -26,9 +28,15 @@ if __name__ == '__main__':
 
     # source_dir = os.path.join(os.getcwd(), "images")
     source_dir = os.path.join(os.getcwd(), "images_ready")
+    if not os.path.exists(source_dir):
+        os.mkdir(source_dir)
+    output_predictions_images_dir = os.path.join(os.getcwd(), "output_pred_images")
+    if not os.path.exists(output_predictions_images_dir):
+        os.mkdir(output_predictions_images_dir)
     input_img_paths = []
     target_img_paths = []
-    for folder in os.listdir(source_dir):
+    print("Loading Dataset")
+    for folder in tqdm(os.listdir(source_dir)):
         if os.path.isdir(os.path.join(source_dir, folder)):
             sample_path = os.path.join(source_dir, folder)
             img_path: str = os.path.join(sample_path,
@@ -51,14 +59,14 @@ if __name__ == '__main__':
     #     print(input_path, "|", target_path)
 
     # Show image number 7 as for example
-    img = mpimg.imread(input_img_paths[4])
-    imgplot = plt.imshow(img)
-    plt.show()
-
-    mask = mpimg.imread(target_img_paths[4])
-    maskplot = plt.imshow(mask)
-
-    plt.show()
+    # img = mpimg.imread(input_img_paths[4])
+    # imgplot = plt.imshow(img)
+    # plt.show()
+    #
+    # mask = mpimg.imread(target_img_paths[4])
+    # maskplot = plt.imshow(mask)
+    #
+    # plt.show()
 
     print("Creating the model")
     model: keras.Model = um.make_model(img_size=img_size, num_classes=num_classes)
@@ -83,7 +91,7 @@ if __name__ == '__main__':
     ]
 
     # Train the model, doing validation at the end of each epoch.
-    EPOCHS = 15
+    EPOCHS = 200
     model.fit(train_gen, epochs=EPOCHS, validation_data=val_gen, callbacks=callbacks)
 
     # Generate predictions for all images in the validation set
@@ -101,10 +109,23 @@ if __name__ == '__main__':
         img_d.show()
         return img_d
 
-    # Display results for validation image #7
+    # Display results for validation image #0
     i = 0
 
     img = PIL.ImageOps.autocontrast(load_img(val_target_img_paths[i]))
     img.show()
 
     display_mask(i)
+
+    def display_result(index: int):
+        img_source = load_img(val_input_img_paths[index])
+        img_source.show()
+        img_target = load_img(val_target_img_paths[index])
+        img_target.show()
+        img_mask = display_mask(index)
+
+        img_mask.save(os.path.join(
+            output_predictions_images_dir,
+            val_input_img_paths[index].split("\\")[-1][:-4] + "_pred.png")
+        )
+        img_mask.close()

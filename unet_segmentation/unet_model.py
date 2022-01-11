@@ -4,7 +4,6 @@ import random
 
 import numpy as np
 from tensorflow import keras
-from tensorflow.keras.layers.experimental.preprocessing import Rescaling
 from tensorflow.keras.layers import Lambda
 from tensorflow.keras import layers
 import Salamandres
@@ -32,7 +31,7 @@ def make_model(img_size: Tuple[int, int], num_classes: int = 2) -> keras.Model:
     previous_block_activation = x  # Set aside residual
 
     # Blocks 1, 2, 3 are identical apart from the feature depth.
-    for filters in [64]:
+    for filters in [64, 128, 256]:
         x = layers.Activation("relu")(x)
         x = layers.SeparableConv2D(filters, 3, padding="same")(x)
         x = layers.BatchNormalization()(x)
@@ -52,7 +51,7 @@ def make_model(img_size: Tuple[int, int], num_classes: int = 2) -> keras.Model:
 
     ### [Second half of the network: upsampling inputs] ###
 
-    for filters in [64, 32]:
+    for filters in [256, 128, 64, 32]:
         x = layers.Activation("relu")(x)
         x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
         x = layers.BatchNormalization()(x)
