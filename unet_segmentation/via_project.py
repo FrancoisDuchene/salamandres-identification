@@ -132,6 +132,8 @@ class ViaFile:
         return "ViaFile {} | {} of type {}".format(self.file_id, self.file_name, self.type)
 
 
+
+
 class ViaProject:
     # Project section
     project_name: str
@@ -203,6 +205,42 @@ class ViaProject:
             .format(self.project_name, self.views_count, self.files_count, self.attribute_count)
 
 
+def fusion_two_via_projects(project_1: ViaProject, project_2: ViaProject):
+    """
+    Fusion 2 projects into 1, project 1 remains the principal project with added data from project_2
+    :param project_1:
+    :param project_2:
+    :return:
+    """
+    maxViewID = project_1.views_count - 1
+    counter = maxViewID
+    # fusion of views
+    for view_l in project_2.views_list:
+        view: ViaView = view_l
+        view.view_id = counter
+        project_1.views_list.append(view)
+        counter += 1
+    maxFileID = project_1.files_count - 1
+    counter = maxFileID
+    for file_assoc in project_2.files_list:
+        file: ViaFile = file_assoc
+        file.file_id = counter
+        project_1.files_list.append(file)
+    if not hasattr(project_1, "nb_fusion"):
+        project_1
+    return project_1
+
+
 if __name__ == '__main__':
     json_path = os.path.join(os.getcwd(), "via_project_salamandres.json")
+    json_path2 = os.path.join(os.getcwd(), "projets_rhetos", "Alexander", "via_project_23Feb2022_16h12m00s.json")
+    json_path3 = os.path.join(os.getcwd(), "projets_rhetos", "Clément", "via_project_23Feb2022_15h58m21s.json")
+    json_path4 = os.path.join(os.getcwd(), "projets_rhetos", "david", "via_project_23Feb2022_16h09m17s.json")
+    json_path5 = os.path.join(os.getcwd(), "projets_rhetos", "Justin", "via_project_23Feb2022_15h56m09s.json")
+    json_path6 = os.path.join(os.getcwd(), "projets_rhetos", "Romane", "via_project_23Feb2022_16h00m26s.json")
     project = ViaProject(json_path)
+    project2 = ViaProject(json_path2)
+    project3 = ViaProject(json_path3)
+    project4 = ViaProject(json_path4)
+    project5 = ViaProject(json_path5)
+    project6 = ViaProject(json_path6)

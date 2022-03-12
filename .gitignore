@@ -2,3 +2,12 @@
 /exiftool.exe
 /exiftool(-k).exe
 /.idea/
+# unet segmentation
+/unet_segmentation/images
+/unet_segmentation/images_ready
+/unet_segmentation/images_not_salam
+/unet_segmentation/epochs50
+/unet_segmentation/epochs200
+/unet_segmentation/output_pred_images
+/unet_segmentation/tttt
+/unet_segmentation/very_small_set

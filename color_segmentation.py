@@ -238,6 +238,7 @@ def show_spots_only_image(app_memory: dict):
     # cv2.destroyAllWindows()
 
     output_folder = "output_modified_images"
+    # output_folder = "trainset_color_segmented"
     cv2.imwrite(os.path.join(output_folder, "test_binaire_"+ str(lab_chosen) + ".jpg"), bin_img)
 
 
@@ -255,17 +256,17 @@ def output_results(app_memory: dict):
         filename = (app_memory["filename"].split(os.sep)[-1].split(".")[0] + "__" + "h" + str(app_memory["height"]) + "w" + str(app_memory["width"]) + "_" +
                     app_memory["color_space"] + '_c' + app_memory['channels']
                     + 'n' + str(app_memory["num_clusters"]) + "_" + app_memory["output_color_type"] + '.' + file_extension)
-        output_folder = "output_modified_images"
+        output_folder = "trainset_color_segmented"
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)
         final_filename = os.path.join(output_folder, filename)
-        cv2.imwrite(final_filename, concatImage)
+        cv2.imwrite(final_filename, kmeans_image)
         if app_memory["verbose"]:
             print(filename, output_folder)
     if app_memory["show_results"] == "gui":
         if app_memory["verbose"]:
             print("showing results")
-        cv2.imshow('Original vs clustered', concatImage)
+        cv2.imshow('Original vs clustered', kmeans_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     return app_memory
@@ -279,7 +280,7 @@ def main(**kwargs):
     kmeans_clustering(app_memory)
     create_kmeans_image(app_memory)
     output_results(app_memory)
-    show_spots_only_image(app_memory)
+    # show_spots_only_image(app_memory)
 
     return app_memory
 
