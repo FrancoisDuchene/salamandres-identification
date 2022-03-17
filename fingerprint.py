@@ -38,7 +38,7 @@ class PolarHistogram:
     #     \ | /
     #      \|/
     # there are 4 points in total, point at the top is a, the lowest one is d
-    # we devide the histogram into four angular regions and two center regions
+    # we divide the histogram into four angular regions and two center regions
     # we start counting regions by starting from the region above baseline (here top right)
     # then going clockwise
 
@@ -54,6 +54,12 @@ class PolarHistogram:
     # }
 
     def __init__(self, points_coord):
+        self.radius = 0
+        self.points_coord = np.array([])
+        self.neighbors = {}
+        self.centroids = {}
+        self.bins = {}
+
         self.radius = self.histogram_radius(points_coord)
         self.points_coord = points_coord
         self.neighbors = self.number_neighbors()
@@ -151,7 +157,7 @@ class PolarHistogram:
     def internal_region(self, init_point_index: int, init_point_transf: tuple, starting_angle: float):
         """
         Check if points are part of the histogram internal region
-        (hypothesising that histogram have only one inernal circle)
+        (hypothesising that histogram have only one internal circle)
         :param init_point_index:
         :param init_point_transf:
         :param starting_angle:
@@ -201,7 +207,9 @@ class PolarHistogram:
         :param p2:
         :return: the angle between p1 and p2 in radian
         """
-        return math.atan2(p2[0] - p1[0], p2[1] - p1[1])
+        p1_t = (0 - p1[0], 0 - p1[1])
+        p2_t = (p2[0] + p1_t[0], p2[1] + p1_t[1])
+        return math.atan2(p2_t[1], p2_t[0])
 
     def check_point(self, x, y, startAngle, radius: float = -1):
         """
@@ -218,20 +226,32 @@ class PolarHistogram:
         if x == 0:  # to avoid divide by 0 when its a 90° angle
             Angle = math.radians(90)
         else:
-            Angle = math.atan(y / x)
+            Angle = math.atan2(y, x)
+
+        # since atan2 gives an answer between -pi/2 and pi/2, if we check a region in between these regions,
+        # we'll have a problem. If endingAngle is bigger than pi/2 (180), we need to make a conversion on Angle
+        # which might be between -pi/2 and 0 so that it can be compared with starting and ending angles.
+        # We have the same problem on the other end, when the starting angle is below the 0 point
+        # (something lower than 2pi (360) and that the ending angle is above 0 but since it's counting a full turn,
+        # it will be more than 360
+
+        if endAngle >= math.radians(360) and Angle >= 0:     # if the angle made a complete tour
+            startAngle = startAngle - math.radians(360)
+            endAngle = endAngle - math.radians(360)
+        elif endAngle > math.radians(180) and Angle < 0:
+            rest = math.radians(180) + Angle
+            Angle = math.radians(180) + rest
 
         # Check whether polarradius is less
         # then radius of circle or not and
         # Angle is between startAngle and
         # endAngle or not
-        if (startAngle <= Angle <= endAngle
+        if (startAngle < Angle <= endAngle
                 and polarradius < radius):
-            print("Point (", x, ",", y, ") "
-                                        "exist in the circle sector")
+            # print("Point (", x, ",", y, ") exist in the circle sector")
             return True
         else:
-            print("Point (", x, ",", y, ") "
-                                        "does not exist in the circle sector")
+            # print("Point (", x, ",", y, ") does not exist in the circle sector")
             return False
 
 
@@ -246,8 +266,6 @@ def dist(p: tuple, q: tuple):
 
 def make_polar_histogram(points: np.ndarray):
     polar_histogram = PolarHistogram(points_coord=points)
-    hist_radius = polar_histogram.radius
-    neightbors = polar_histogram.neighbors
     return polar_histogram
 
 
@@ -258,18 +276,6 @@ if __name__ == "__main__":
     histogram = make_polar_histogram(R)
 
     image = np.zeros(shape=[800, 600, 3], dtype=np.uint8)
-
-    col = 0
-    for i in range(0, R.shape[0]):
-        cv2.circle(image,
-                   (int(np.round(histogram.centroids[i][0] * 100)), int(np.round(histogram.centroids[i][1] * 100))),
-                   5,
-                   (255 - col, col, 0),
-                   -1)
-        col += 20
-    cv2.imshow("radius", image)
-    cv2.waitKey(10000)
-    cv2.destroyAllWindows()
 
     col = 0
     for p in R:
