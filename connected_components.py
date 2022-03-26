@@ -16,8 +16,10 @@ class ConnectedComponentsData:
     # labels: np.ndarray    # si on met ce champs lors du dump json, il n'y a plus d'espace mémoire
     stats: np.ndarray
     centroids: np.ndarray
-    avg_area: float
-
+    areas: np.ndarray
+    area_avg: float
+    area_std: float
+    area_median: float
 
     def __init__(self, image: np.ndarray, image_name: str):
         output = cv2.connectedComponentsWithStats(image, connectivity=8, ltype=cv2.CV_32S)
@@ -27,6 +29,32 @@ class ConnectedComponentsData:
         self.stats = stats
         self.centroids = centroids
         self.image_name = image_name
+        self.areas = self.get_areas()
+        self.area_avg = self.get_area_avg()
+        self.area_std = self.get_area_std()
+        self.area_median = self.get_area_median()
+
+    def get_areas(self) -> np.ndarray:
+        areas = []
+        for k in range(1, self.num_labels):
+            areas.append(self.stats[k, cv2.CC_STAT_AREA])
+        area_np = np.array(areas)
+        return area_np
+
+    def get_area_avg(self):
+        area_np = self.get_areas()
+        return area_np.mean()
+
+    def get_area_std(self):
+        area_np = self.get_areas()
+        return area_np.std()
+
+    def get_area_median(self):
+        area_np = self.get_areas()
+        median = np.median(area_np)
+        if isinstance(median, np.ndarray):
+            return median[0]
+        return median
 
     def background_stats(self):
         return self.stats[0]
@@ -204,10 +232,18 @@ def analyse_cc(image_paths: list) -> CCDataSet:
     :return: a CCDataset object containing the cc infos for all of the images
     """
     data_set = CCDataSet()
+    must_draw = False
+    count = 0
     for path in tqdm(image_paths):
         image = cv2.imread(path)
-        data = analyse_one_cc(image, path)
+        data = analyse_one_cc(image, path, must_draw)
         data_set.add(data)
+        count += 1
+        if count == 302:
+            must_draw = True
+        else:
+            if must_draw:
+                must_draw = False
 
     return data_set
 
@@ -248,8 +284,9 @@ if __name__ == "__main__":
 
     cc_data_set = analyse_cc(images_paths)
     unique, count, areas_np = cc_data_set.compute_frequency()
-    json = cc_data_set.to_json()
-    jsonFile = open("cc_data_set.json", "w")
-    jsonFile.write(json)
-    jsonFile.close()
+    plotting_frequency(unique, count)
+    # json = cc_data_set.to_json()
+    # jsonFile = open("cc_data_set.json", "w")
+    # jsonFile.write(json)
+    # jsonFile.close()
 

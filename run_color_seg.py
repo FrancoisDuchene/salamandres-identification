@@ -3,6 +3,7 @@ import os
 import os.path
 from tqdm import tqdm
 
+
 def test_color_seg():
     input_folder = "input_images"
     files = [

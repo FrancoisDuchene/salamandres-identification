@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import math
 
-from fingerprint import PolarHistogram, dist
+from fingerprint import PolarHistogram, dist, make_similarity_matrix, analyse_similarity_matrix, compare_histograms
 
 
 class PolarHistogramTestCase(unittest.TestCase):
@@ -363,6 +363,94 @@ class PolarHistogramTestCase(unittest.TestCase):
         self.assertEqual(bins_1[3][6][1], 0)
         self.assertEqual(bins_1[3][7][0], 0)
         self.assertEqual(bins_1[3][7][1], 0)
+
+    def test_histogram_comparisons(self):
+        # Reference image
+        X1 = np.array([[2, 1],
+                      [3, 1.5],
+                      [4, 1],
+                      [3, 4],
+                      [6, 3],
+                      [7, 7]])
+        # Translated on X (each point)
+        X2 = np.array([[3, 1],
+                       [4, 1.5],
+                       [5, 1],
+                       [4, 4],
+                       [7, 3],
+                       [8, 7]])
+        # Rotate of -90 degrees
+        X3 = np.array([[1, 6],
+                       [1.5, 5],
+                       [1, 4],
+                       [4, 5],
+                       [3, 2],
+                       [7, 1]])
+        # Reference image minus the farthest point
+        X4 = np.array([[2, 1],
+                       [3, 1.5],
+                       [4, 1],
+                       [3, 4],
+                       [6, 3]])
+        # Reference image minus one point
+        X5 = np.array([[3, 1.5],
+                       [4, 1],
+                       [3, 4],
+                       [6, 3],
+                       [7, 7]])
+        # Translation X (with variation of delta +- 0.2)
+        X6 = np.array([[2.9, 1],
+                       [4, 1.5],
+                       [5.2, 1],
+                       [3.8, 4],
+                       [7, 3],
+                       [8.1, 7]])
+        # Translation X (with variation of delta +- 0.4)
+        X7 = np.array([[2.6, 1],
+                       [4, 1.5],
+                       [5.4, 1],
+                       [3.6, 4],
+                       [7, 3],
+                       [8.2, 7]])
+        # Translation XY (with variation of delta +- 0.2)
+        X8 = np.array([[2.9, 2.9],
+                       [4, 2.5],
+                       [5.2, 2.2],
+                       [3.8, 4.8],
+                       [7, 4],
+                       [8.1, 8.1]])
+        histogram_1 = PolarHistogram(X1)
+        histogram_2 = PolarHistogram(X2)
+        histogram_3 = PolarHistogram(X3)
+        histogram_4 = PolarHistogram(X4)
+        histogram_5 = PolarHistogram(X5)
+        histogram_6 = PolarHistogram(X6)
+        histogram_7 = PolarHistogram(X7)
+        histogram_8 = PolarHistogram(X8)
+
+        sim_matrix_h1_h1 = make_similarity_matrix(histogram_1, histogram_1)
+
+        for i in range(0, len(sim_matrix_h1_h1)):
+            self.assertEqual(sim_matrix_h1_h1[i][i], 1)
+
+        self.assertEqual(compare_histograms(histogram_1, histogram_2), 1)
+        self.assertEqual(compare_histograms(histogram_1, histogram_3), 1)
+        self.assertEqual(compare_histograms(histogram_2, histogram_3), 1)
+        # We remove points
+        self.assertEqual(compare_histograms(histogram_1, histogram_4), 0.6)
+        self.assertEqual(compare_histograms(histogram_2, histogram_4), 0.6)
+        self.assertEqual(compare_histograms(histogram_3, histogram_4), 0.4)
+
+        self.assertEqual(compare_histograms(histogram_1, histogram_5), 0.6)
+        self.assertEqual(compare_histograms(histogram_2, histogram_5), 0.6)
+        self.assertEqual(compare_histograms(histogram_3, histogram_5), 0.4)
+
+        self.assertEqual(compare_histograms(histogram_1, histogram_6), 1)
+        self.assertGreaterEqual(compare_histograms(histogram_1, histogram_7), 0.66)
+        self.assertGreaterEqual(compare_histograms(histogram_6, histogram_7), 0.83)
+        self.assertGreaterEqual(compare_histograms(histogram_1, histogram_8), 0.33)
+        self.assertGreaterEqual(compare_histograms(histogram_6, histogram_8), 0.33)
+        self.assertGreaterEqual(compare_histograms(histogram_7, histogram_8), 0.33)
 
 
 if __name__ == '__main__':

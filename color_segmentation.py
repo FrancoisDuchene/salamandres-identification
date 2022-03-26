@@ -253,9 +253,10 @@ def output_results(app_memory: dict):
     if app_memory['output_file']:
         # Construct output filename and write image to disk.
         file_extension = app_memory['output_format']
-        filename = (app_memory["filename"].split(os.sep)[-1].split(".")[0] + "__" + "h" + str(app_memory["height"]) + "w" + str(app_memory["width"]) + "_" +
-                    app_memory["color_space"] + '_c' + app_memory['channels']
-                    + 'n' + str(app_memory["num_clusters"]) + "_" + app_memory["output_color_type"] + '.' + file_extension)
+        # filename = (app_memory["filename"].split(os.sep)[-1].split(".")[0] + "__" + "h" + str(app_memory["height"]) + "w" + str(app_memory["width"]) + "_" +
+        #             app_memory["color_space"] + '_c' + app_memory['channels']
+        #             + 'n' + str(app_memory["num_clusters"]) + "_" + app_memory["output_color_type"] + '.' + file_extension)
+        filename = (app_memory["filename"].split(os.sep)[-1].split(".")[0] + '.' + file_extension)
         output_folder = "trainset_color_segmented"
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)

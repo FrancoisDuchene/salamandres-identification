@@ -10,6 +10,8 @@ HISTOGRAM_ANGLE_REGION = (math.pi / 4)  # 45°
 HISTOGRAM_NB_ANGLE_REGION = 8
 HISTOGRAM_NB_INTERNAL_CIRCLE = 1
 
+GAMMA = 1e-7
+
 
 class PolarHistogram:
     radius: float = 0.0
@@ -17,6 +19,7 @@ class PolarHistogram:
     neighbors: dict = {}
     centroids: dict = {}
     bins: dict = {}
+    name: str
 
     # bins datastructure: a dictionary with points coordinates indexes serving as keys (0 for first point coordinates,
     # 1 for the second, ...). Each point has a dictionary discribing the bins around them in a circular fashion
@@ -40,7 +43,7 @@ class PolarHistogram:
     # there are 4 points in total, point at the top is a, the lowest one is d
     # we divide the histogram into four angular regions and two center regions
     # we start counting regions by starting from the region above baseline (here top right)
-    # then going clockwise
+    # then going clockwise.
 
     # gives
     # bins = {
@@ -52,13 +55,16 @@ class PolarHistogram:
     #   }
     # ...
     # }
+    #
+    # Each bin itself is an histogram for a particular point
 
-    def __init__(self, points_coord):
+    def __init__(self, points_coord, name=""):
         self.radius = 0
         self.points_coord = np.array([])
         self.neighbors = {}
         self.centroids = {}
         self.bins = {}
+        self.name = name
 
         self.radius = self.histogram_radius(points_coord)
         self.points_coord = points_coord
@@ -254,6 +260,27 @@ class PolarHistogram:
             # print("Point (", x, ",", y, ") does not exist in the circle sector")
             return False
 
+    def show_img_radius(self, img_width: int = 1920, img_height: int = 1080):
+        image = np.zeros(shape=[img_width, img_height, 3], dtype=np.uint8)
+        col = 0
+        for p in self.points_coord:
+            cv2.circle(image, (int(p[0]), int(p[1])), 5, (0, 0, 255), -1)
+            cv2.circle(image, (int(p[0]), int(p[1])), int(np.round(self.radius)), (0, math.fabs(255 - col),
+                                                                                                255), 1)
+            col += 3
+        cv2.imshow("radius with points", image)
+        cv2.waitKey(2000)
+        cv2.destroyAllWindows()
+        cv2.imwrite("{}_hist_circles.png".format(self.name), image)
+
+    def __str__(self):
+        return "PolarHistogram \"{}\" of radius {} and {} points"\
+            .format(self.name, round(self.radius, 3), self.points_coord.__len__())
+
+    def __repr__(self):
+        return "PolarHistogram \"{}\" (r: {}, nb_points: {})"\
+            .format(self.name, round(self.radius, 3), self.points_coord.__len__())
+
 
 def dist(p: tuple, q: tuple):
     def euclidian_dist(p: tuple, q: tuple):
@@ -264,24 +291,112 @@ def dist(p: tuple, q: tuple):
     return euclidian_dist(p, q)
 
 
-def make_polar_histogram(points: np.ndarray):
-    polar_histogram = PolarHistogram(points_coord=points)
+def chi_square_test(h1: dict, h2: dict) -> float:
+    """
+    Perform a chi-square type test on two histograms h1 and h2 and returns the result.
+    Concretely, it compare each bin separately and sum up the differences.
+    It apply the following formula:
+
+    sum  {h1(k) - h2(k)}²/{h1(k) + h2(k) + GAMMA}
+     k
+
+    :param h1: first histogram
+    :param h2: second histogram
+    :return: a score determining the similarity between h1 and h2 (to get a probability, do : 1 - chi_square_test(h1,h2)
+    """
+    sum_differences_regions = 0
+    for region in h1:
+        h1_region_horizontal_bins: list = h1[region]   # represent the horizontal bins of a specific angle region
+        h2_region_horizontal_bins: list = h2[region]
+        for k in range(0,len(h1_region_horizontal_bins)):
+            h1_k = h1_region_horizontal_bins[k]
+            h2_k = h2_region_horizontal_bins[k]
+
+            numerator = (h1_k - h2_k) ** 2
+            denominator = h1_k + h2_k + GAMMA
+            sum_differences_regions += (numerator / denominator)
+    return 0.5 * sum_differences_regions
+
+
+def make_similarity_matrix(global_hist_1: PolarHistogram, global_hist_2: PolarHistogram):
+    similarity_matrix = []    # the similarity matrix between global histogram 1 and 2
+    for i in range(0, len(global_hist_1.bins)):
+        for j in range(0, len(global_hist_2.bins)):
+            l_ij = 1 - chi_square_test(global_hist_1.bins[i], global_hist_2.bins[j])
+            if j == 0:
+                similarity_matrix.append([l_ij])
+            else:
+                similarity_matrix[i].append(l_ij)
+
+    return similarity_matrix
+
+
+def analyse_similarity_matrix(similarity_matrix: List[list]) -> float:
+    """
+    This method analyze a similarity_matrix of two global histograms and
+    returns the probability that the two global histograms are similar
+    TODO currently using Cui2014Method without RANSAC algorithm
+    :param similarity_matrix: a similarity matrix of two global histograms, computed in make_similarity_matrix method
+    :return: a probability [0;1] of the similarity between them, with 0 as no similarity at all and with 1 as perfect
+    similarity
+    """
+    nb_rows = len(similarity_matrix)
+    nb_col = len(similarity_matrix[0])
+    sim_mat_np = np.array(similarity_matrix)
+    max_columns = sim_mat_np.max(axis=0)
+    max_rows = sim_mat_np.max(axis=1)
+
+    matching_pairs_count = 0
+
+    for i in range(0, min(nb_rows, nb_col)):
+        diag_i = similarity_matrix[i][i]
+        max_c = max_columns[i]
+        max_r = max_rows[i]
+        # if the i-th diagonal item is the max value for both the i-th column and row, then it's a matching pair
+        if diag_i == max_c and diag_i == max_r:
+            matching_pairs_count += 1
+
+    score = matching_pairs_count / min(nb_rows, nb_col)
+
+    return score
+
+
+def compare_histograms(global_hist_1: PolarHistogram, global_hist_2: PolarHistogram) -> float:
+    return analyse_similarity_matrix(make_similarity_matrix(global_hist_1, global_hist_2))
+
+
+def make_polar_histogram(points: np.ndarray, name: str = ""):
+    polar_histogram = PolarHistogram(points_coord=points, name=name)
     return polar_histogram
 
 
 if __name__ == "__main__":
     R = np.array([[1, 1], [3, 2], [3, 1], [2, 3], [2, 2], [4, 4], [5, 7], [2, 5]])
     T = np.array([[2, 1], [4, 2], [4, 1], [3, 3], [3, 2], [5, 4], [6, 7], [3, 5]])
+    Z = np.array([[0, 0], [14, 22], [5, 8], [17, 23], [13, 0.2], [0.5, 0.4], [2, 9], [9, 9]])
+    W = np.array([[1, 1], [3, 2], [3, 1], [2, 3], [2, 2], [4, 4], [5, 7], [3, 4]])
 
-    histogram = make_polar_histogram(R)
+    histogram1 = make_polar_histogram(R)
+    histogram2 = make_polar_histogram(T)
+    histogram3 = make_polar_histogram(Z)
+    histogram4 = make_polar_histogram(W)
 
-    image = np.zeros(shape=[800, 600, 3], dtype=np.uint8)
+    sim_matrix_1 = np.array(make_similarity_matrix(histogram1, histogram2))
+    sim_matrix_2 = np.array(make_similarity_matrix(histogram1, histogram1))
+    sim_matrix_3 = np.array(make_similarity_matrix(histogram1, histogram3))
 
-    col = 0
-    for p in R:
-        cv2.circle(image, (p[0] * 100, p[1] * 100), 5, (0, 0, 255), -1)
-        cv2.circle(image, (p[0] * 100, p[1] * 100), int(np.round(histogram.radius * 100)), (0, 255 - col, 255), 1)
-        col += 15
-    cv2.imshow("radius with points", image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    proba_sim_1 = compare_histograms(histogram1, histogram2)
+    proba_sim_2 = compare_histograms(histogram1, histogram1)
+    proba_sim_3 = compare_histograms(histogram1, histogram3)
+    proba_sim_4 = compare_histograms(histogram1, histogram4)
+
+    # image = np.zeros(shape=[800, 600, 3], dtype=np.uint8)
+    #
+    # col = 0
+    # for p in R:
+    #     cv2.circle(image, (p[0] * 100, p[1] * 100), 5, (0, 0, 255), -1)
+    #     cv2.circle(image, (p[0] * 100, p[1] * 100), int(np.round(histogram.radius * 100)), (0, 255 - col, 255), 1)
+    #     col += 15
+    # cv2.imshow("radius with points", image)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
