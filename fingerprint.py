@@ -20,6 +20,7 @@ class PolarHistogram:
     centroids: dict = {}
     bins: dict = {}
     name: str
+    short_name: str
 
     # bins datastructure: a dictionary with points coordinates indexes serving as keys (0 for first point coordinates,
     # 1 for the second, ...). Each point has a dictionary discribing the bins around them in a circular fashion
@@ -65,6 +66,7 @@ class PolarHistogram:
         self.centroids = {}
         self.bins = {}
         self.name = name
+        self.short_name = name.split(os.sep)[-1]
 
         self.radius = self.histogram_radius(points_coord)
         self.points_coord = points_coord
@@ -318,7 +320,7 @@ def chi_square_test(h1: dict, h2: dict) -> float:
     return 0.5 * sum_differences_regions
 
 
-def make_similarity_matrix(global_hist_1: PolarHistogram, global_hist_2: PolarHistogram):
+def make_similarity_matrix(global_hist_1: PolarHistogram, global_hist_2: PolarHistogram) -> list:
     similarity_matrix = []    # the similarity matrix between global histogram 1 and 2
     for i in range(0, len(global_hist_1.bins)):
         for j in range(0, len(global_hist_2.bins)):
@@ -365,7 +367,7 @@ def compare_histograms(global_hist_1: PolarHistogram, global_hist_2: PolarHistog
     return analyse_similarity_matrix(make_similarity_matrix(global_hist_1, global_hist_2))
 
 
-def make_polar_histogram(points: np.ndarray, name: str = ""):
+def make_polar_histogram(points: np.ndarray, name: str = "") -> PolarHistogram:
     polar_histogram = PolarHistogram(points_coord=points, name=name)
     return polar_histogram
 

@@ -74,6 +74,10 @@ class ConnectedComponentsData:
         """
         return self.num_labels-1
 
+    def __str__(self):
+        return "CC for {} (nb_labels: {}, avg_area: {}, std_area: {}, med_area: {})"\
+            .format(self.image_name, self.num_labels, self.area_avg, self.area_std, self.area_median)
+
 
 class ConnectedComponentsEncoder(JSONEncoder):
     # https://stackoverflow.com/questions/36435039/failing-to-convert-numpy-array-to-json
@@ -221,7 +225,7 @@ def draw_info_cc(image_bgr: np.ndarray, path, cc_n, x, y, w, h, cx, cy):
     # cv2.imshow("cc_window_name", image_bgr)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-    cv2.imwrite(path[:-4] + "_cc{}_.png".format(cc_n), img_cpy)
+    # cv2.imwrite(path[:-4] + "_cc{}_.png".format(cc_n), img_cpy)
     return img_cpy
 
 
