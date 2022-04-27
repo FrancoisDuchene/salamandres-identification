@@ -58,11 +58,13 @@ def process_args(args: dict):
         "output_file": (bool) if a output file must be produced
         "output_format": (str) the file format which will be used if a output file is produced.
         "output_color_type": (str) used to specify wether the resulting Kmeans output image will be in grayscale or in RGB.
+        "output_two_clusters_only": (bool) if true, the resulting image will be forced into two shades only,
+            setting all intermediate values to black, used only when num_clusters > 2
     """
     app_memory = {"filename": str, "image": None, "orig": None, "width": int, "height": int, "color_space": str,
                   "channels": str, "num_clusters": int, "output_file": bool, "output_format": str, "kmeans_res": None,
                   "clustering": None, "labels": list, "adjusted_labels": list, "output_color_type": str, "kmeans_image": None,
-                  "show_results": str, "verbose": bool}
+                  "show_results": str, "verbose": bool, "output_two_clusters_only": bool}
     image = cv2.imread(args['image'])
     app_memory["filename"] = copy.copy(args['image'])
     app_memory["image"] = image
@@ -121,6 +123,7 @@ def process_args(args: dict):
     else:
         app_memory["show_results"] = args["show_results"]
     app_memory["verbose"] = args["verbose"]
+    app_memory["output_two_clusters_only"] = args["output_two_clusters_only"]
     return app_memory
 
 
@@ -205,7 +208,11 @@ def create_kmeans_image(app_memory: dict):
         kmeansImage = np.zeros(kmeans_image_shape, dtype=np.uint8)
         app_memory["adjusted_labels"] = []
         for i, label in enumerate(sorted_labels):
-            a = int((255) / (num_clusters - 1)) * i
+            a = int((255 / (num_clusters - 1)) * i)
+            if app_memory["output_two_clusters_only"] and a != 255:
+                # if we want only the white layer, we set every other layer in black
+                a = 0
+
             if gray:
                 kmeansImage[app_memory["clustering"] == label] = a
                 app_memory["adjusted_labels"].append(a)

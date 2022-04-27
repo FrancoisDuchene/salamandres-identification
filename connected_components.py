@@ -6,8 +6,11 @@ import cv2
 import os
 import matplotlib.pyplot as plt
 
+import scipy.stats as spstats
 import numpy as np
 from tqdm import tqdm
+
+CC_CONNECTIVITY = 8
 
 
 class ConnectedComponentsData:
@@ -22,7 +25,7 @@ class ConnectedComponentsData:
     area_median: float
 
     def __init__(self, image: np.ndarray, image_name: str):
-        output = cv2.connectedComponentsWithStats(image, connectivity=8, ltype=cv2.CV_32S)
+        output = cv2.connectedComponentsWithStats(image, connectivity=CC_CONNECTIVITY, ltype=cv2.CV_32S)
         (numLabels, labels, stats, centroids) = output
         self.num_labels = numLabels
         # self.labels = labels
@@ -237,17 +240,10 @@ def analyse_cc(image_paths: list) -> CCDataSet:
     """
     data_set = CCDataSet()
     must_draw = False
-    count = 0
     for path in tqdm(image_paths):
         image = cv2.imread(path)
         data = analyse_one_cc(image, path, must_draw)
         data_set.add(data)
-        count += 1
-        if count == 302:
-            must_draw = True
-        else:
-            if must_draw:
-                must_draw = False
 
     return data_set
 
@@ -264,11 +260,11 @@ def analyse_one_cc(image: np.ndarray, path: str, must_draw: bool = False) -> Con
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     cc_data = ConnectedComponentsData(image=gray, image_name=path)
 
-    if must_draw:
-        for cc_n in range(0, cc_data.nb_labels()):
-            stats = cc_data.component_stats(cc_n)
-            draw_info_cc(image, path, cc_n, stats["x"], stats["y"], stats["width"], stats["height"],
-                         stats["centroids"][0], stats["centroids"][1])
+    # if must_draw:
+    #     for cc_n in range(0, cc_data.nb_labels()):
+    #         stats = cc_data.component_stats(cc_n)
+    #         draw_info_cc(image, path, cc_n, stats["x"], stats["y"], stats["width"], stats["height"],
+    #                      stats["centroids"][0], stats["centroids"][1])
     return cc_data
 
 
@@ -277,6 +273,15 @@ def plotting_frequency(unique, count):
     plt.xlabel("Unique values")
     plt.ylabel("Frequency")
     plt.show()
+
+
+def print_stat_moments(areas: np.ndarray):
+    print("Stats about area")
+    print("mean: ", round(np.mean(areas), ndigits=6))
+    print("std: ", round(np.std(areas), ndigits=6))
+    print("median: ", round(np.median(areas), ndigits=6))
+    print("skewness (corr bias): ", round(spstats.skew(areas, bias=False), ndigits=6))
+    print("kurtosis (fisher + corr bias): ", round(spstats.kurtosis(areas, fisher=True, bias=False), ndigits=6))
 
 
 if __name__ == "__main__":
@@ -289,6 +294,7 @@ if __name__ == "__main__":
     cc_data_set = analyse_cc(images_paths)
     unique, count, areas_np = cc_data_set.compute_frequency()
     plotting_frequency(unique, count)
+    print_stat_moments(areas_np)
     # json = cc_data_set.to_json()
     # jsonFile = open("cc_data_set.json", "w")
     # jsonFile.write(json)

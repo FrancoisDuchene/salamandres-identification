@@ -30,12 +30,12 @@ def test_color_seg():
 def color_segmentation(inputs: list):
     color_space = "lab"
     channels = "12"
-    num_clusters = 2
+    num_clusters = 3
     width = 1024    # un bon compromis vu que les images N&B ne prennent pas beaucoup de place
     for image in tqdm(inputs):
         cs.main(image=image, width=width, color_space=color_space, channels=channels,
                 num_clusters=num_clusters, output_file=True, output_format="png",
-                output_color="gray", verbose=False, show_results="false")
+                output_color="gray", verbose=False, show_results="false", output_two_clusters_only=True)
 
 
 if __name__ == '__main__':

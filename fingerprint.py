@@ -6,6 +6,8 @@ import pandas as pd
 from typing import List
 import os
 
+from tqdm import tqdm
+
 HISTOGRAM_ANGLE_REGION = (math.pi / 4)  # 45°
 HISTOGRAM_NB_ANGLE_REGION = 8
 HISTOGRAM_NB_INTERNAL_CIRCLE = 1
@@ -68,10 +70,14 @@ class PolarHistogram:
         self.name = name
         self.short_name = name.split(os.sep)[-1]
 
-        self.radius = self.histogram_radius(points_coord)
+        # print("radius")
+        self.radius, distances_list = self.histogram_radius(points_coord)
         self.points_coord = points_coord
-        self.neighbors = self.number_neighbors()
+        # print("neighbors")
+        self.neighbors = self.number_neighbors(distances_list)
+        # print("centroids")
         self.centroids = self.compute_centroids()  # contains the centroids for each points, a centroid is a (x,y) coordinates
+        # print("bins")
         self.bins = self.compute_bins()
 
     def add_neighbor(self, p, q):
@@ -108,39 +114,51 @@ class PolarHistogram:
     @staticmethod
     def histogram_radius(points: np.ndarray):
         m = points.shape[0]
-        gamma = .0
-        coef = (1 / (2 * m)) + gamma
 
+        coef = (1 / (2 * np.square(m)))
+
+        distance_list = []  # list containing the distances between points, used for optimization purposes
         doublesum = 0
         for p in range(0, m):
             for q in range(p + 1, m):
                 d = dist(points.__getitem__(p), points.__getitem__(q))
-                doublesum += 0.5 * d
+                doublesum += d
+                distance_list.append(d)
         radius = coef * doublesum
-        return radius
+        return radius, distance_list
 
-    def number_neighbors(self):
+    def number_neighbors(self, distances: list = None):
         points = self.points_coord
         m = points.shape[0]
 
-        for p in range(0, m):
-            for q in range(p + 1, m):
-                pp = points.__getitem__(p)
-                pq = points.__getitem__(q)
-                euclidian_dist = dist(pp, pq)
-                if euclidian_dist <= self.radius:
-                    self.add_neighbor(p, q)
+        if distances is not None:
+            distances_counter = 0
+            for p in range(0, m):
+                for q in range(p + 1, m):
+                    euclidian_dist = distances[distances_counter]
+                    if euclidian_dist <= self.radius:
+                        self.add_neighbor(p, q)
+                    distances_counter += 1
+        else:
+            for p in range(0, m):
+                for q in range(p + 1, m):
+                    pp = points.__getitem__(p)
+                    pq = points.__getitem__(q)
+                    euclidian_dist = dist(pp, pq)
+                    if euclidian_dist <= self.radius:
+                        self.add_neighbor(p, q)
         return self.neighbors
 
     def compute_centroids(self):
         for i in range(0, self.points_coord.__len__()):
             if i in self.neighbors:
                 N = self.neighbors[i].__len__()
-                arrays = []
+                x_sum, y_sum = 0, 0
                 neigh = self.get_neighbors(i)
                 for j in neigh:
-                    arrays.append(self.points_coord[j])
-                centroid = (1 / N) * np.sum(arrays, 0)
+                    x_sum += self.points_coord[j][0]
+                    y_sum += self.points_coord[j][1]
+                centroid = (1 / N) * np.array([x_sum, y_sum])
                 self.centroids[i] = centroid
             else:  # when there's no neighbors
                 self.centroids[i] = self.points_coord[i]
@@ -151,53 +169,62 @@ class PolarHistogram:
         for i in range(0, self.points_coord.__len__()):
             bins[i] = {}
             point_i = self.points_coord[i]
+            neighbors_i = self.get_neighbors(i)
             starting_angle = self.angle_two_points(point_i, self.centroids[i])
             transf_x = 0 - point_i[0]
             transf_y = 0 - point_i[1]
             transf_point = (transf_x, transf_y)
             for j in range(0, HISTOGRAM_NB_ANGLE_REGION):
-                internal_counter, internal_points = self.internal_region(i, transf_point, starting_angle)
-                external_counter = self.external_region(i, transf_point, starting_angle, internal_points)
-                bins[i][j] = [internal_counter, external_counter]
+                section_points = self.section_region(transf_point, starting_angle, neighbors=neighbors_i)
+                counter_internal_points, counter_external_points = self.internal_region(transf_point, starting_angle,
+                                                                         section_points=section_points)
+                bins[i][j] = [counter_internal_points, counter_external_points]
                 starting_angle += HISTOGRAM_ANGLE_REGION
         return bins
 
-    def internal_region(self, init_point_index: int, init_point_transf: tuple, starting_angle: float):
+    def internal_region(self, init_point_transf: tuple, starting_angle: float, section_points: list):
         """
         Check if points are part of the histogram internal region
         (hypothesising that histogram have only one internal circle)
-        :param init_point_index:
         :param init_point_transf:
         :param starting_angle:
+        :param section_points:
         :return: a counter of the number of points in this region, a list of the points in this region (used later)
         """
-        counter = 0
-        internal_points = []
+        nb_points = len(section_points)
+        counter_internal_points = 0
+        counter_external_points = 0
         tx = init_point_transf[0]
         ty = init_point_transf[1]
-        for k in range(0, self.points_coord.__len__()):
-            # we continue if k is the point we are making a histogram for
-            if k == init_point_index:
-                continue
-            pi_t = (self.points_coord[k][0] + tx, self.points_coord[k][1] + ty)
-            if self.check_point(pi_t[0], pi_t[1], starting_angle, radius=self.radius/2):
-                counter += 1
-                internal_points.append(self.points_coord[k])
-        return counter, internal_points
+        for k in range(0, nb_points):
+            point = section_points[k]
+            pi_t = (point[0] + tx, point[1] + ty)
+            if self.check_point(pi_t[0], pi_t[1], starting_angle, radius=self.radius / 2):
+                counter_internal_points += 1
+            else:
+                counter_external_points += 1
+        return counter_internal_points, counter_external_points
 
-    def external_region(self, init_point_index: int, init_point_transf: tuple, starting_angle, internal_points: list):
-        counter = 0
+    def section_region(self, init_point_transf: tuple, starting_angle, neighbors: List[int]):
+        """
+
+        :param init_point_transf:
+        :param starting_angle:
+        :param neighbors: the list of neighbors for init_point_index (is used to optimize the algorithm)
+        :return:
+        """
+        section_points = []
         tx = init_point_transf[0]
         ty = init_point_transf[1]
-        for k in range(0, self.points_coord.__len__()):
-            # we continue if k is the point we are making a histogram for or if the point is already part of
-            # the region internal points
-            if k == init_point_index or self.numpy_array_contains_point(internal_points, self.points_coord[k]):
-                continue
-            pi_t = (self.points_coord[k][0] + tx, self.points_coord[k][1] + ty)
-            if self.check_point(pi_t[0], pi_t[1], starting_angle):
-                counter += 1
-        return counter
+        nb_points = len(neighbors)
+
+        for k in range(0, nb_points):
+            neighbor_index = neighbors[k]
+            neighbor_coord = self.points_coord[neighbor_index]
+            pi_t = (neighbor_coord[0] + tx, neighbor_coord[1] + ty)
+            if self.check_point(pi_t[0], pi_t[1], starting_angle, check_distance=False):
+                section_points.append(neighbor_coord)
+        return section_points
 
     @staticmethod
     def numpy_array_contains_point(arr: List[np.ndarray], point: np.ndarray):
@@ -219,20 +246,24 @@ class PolarHistogram:
         p2_t = (p2[0] + p1_t[0], p2[1] + p1_t[1])
         return math.atan2(p2_t[1], p2_t[0])
 
-    def check_point(self, x, y, startAngle, radius: float = -1):
+    def check_point(self, x: int, y: int, startAngle: float, radius: float = -1, check_distance: bool = True) -> bool:
         """
         check if a point is inside an angle region. We suppose the referential point is at (0,0)
-        startAngle: must be in RADIAN
+        :param x: x coordinate of the point to check
+        :param y: y coordinate of the point to check
+        :param startAngle: must be in RADIAN
+        :param radius
+        :param check_distance: optimizer parameter (def: True). If True, check both angle and distance,
+            else check only the angle
+        :return True if the point is contained in the circle section in comparison with the origin
         """
         if radius == -1:
             radius = self.radius
         # calculate endAngle
         endAngle = startAngle + HISTOGRAM_ANGLE_REGION
 
-        # Calculate polar co-ordinates
-        polarradius = math.sqrt(x * x + y * y)
         if x == 0:  # to avoid divide by 0 when its a 90° angle
-            Angle = math.radians(90)
+            Angle = 1.5707963267948966  # math.radians(90)
         else:
             Angle = math.atan2(y, x)
 
@@ -243,24 +274,34 @@ class PolarHistogram:
         # (something lower than 2pi (360) and that the ending angle is above 0 but since it's counting a full turn,
         # it will be more than 360
 
-        if endAngle >= math.radians(360) and Angle >= 0:     # if the angle made a complete tour
-            startAngle = startAngle - math.radians(360)
-            endAngle = endAngle - math.radians(360)
-        elif endAngle > math.radians(180) and Angle < 0:
-            rest = math.radians(180) + Angle
-            Angle = math.radians(180) + rest
+        # math.radians(180) = 3.141592653589793
+        # math.radians(360) = 6.283185307179586
+        if endAngle >= 6.283185307179586 and Angle >= 0:     # if the angle made a complete tour
+            startAngle = startAngle - 6.283185307179586
+            endAngle = endAngle - 6.283185307179586
+        elif endAngle > 3.141592653589793 and Angle < 0:
+            rest = 3.141592653589793 + Angle
+            Angle = 3.141592653589793 + rest
 
         # Check whether polarradius is less
         # then radius of circle or not and
         # Angle is between startAngle and
         # endAngle or not
-        if (startAngle < Angle <= endAngle
-                and polarradius < radius):
-            # print("Point (", x, ",", y, ") exist in the circle sector")
-            return True
+        # Calculate polar co-ordinates
+        if check_distance:
+            polarradius = math.sqrt(x * x + y * y)
+            if (startAngle < Angle <= endAngle
+                    and polarradius < radius):
+                # print("Point (", x, ",", y, ") exist in the circle sector")
+                return True
+            else:
+                # print("Point (", x, ",", y, ") does not exist in the circle sector")
+                return False
         else:
-            # print("Point (", x, ",", y, ") does not exist in the circle sector")
-            return False
+            if startAngle < Angle <= endAngle:
+                return True
+            else:
+                return False
 
     def show_img_radius(self, img_width: int = 1920, img_height: int = 1080):
         image = np.zeros(shape=[img_width, img_height, 3], dtype=np.uint8)
@@ -273,7 +314,7 @@ class PolarHistogram:
         cv2.imshow("radius with points", image)
         cv2.waitKey(2000)
         cv2.destroyAllWindows()
-        cv2.imwrite("{}_hist_circles.png".format(self.name), image)
+        cv2.imwrite(os.path.join("histograms_radius", "{}_hist_circles.png".format(self.name)), image)
 
     def __str__(self):
         return "PolarHistogram \"{}\" of radius {} and {} points"\
@@ -321,6 +362,7 @@ def chi_square_test(h1: dict, h2: dict) -> float:
 
 
 def make_similarity_matrix(global_hist_1: PolarHistogram, global_hist_2: PolarHistogram) -> list:
+    # print("Building sim matrix")
     similarity_matrix = []    # the similarity matrix between global histogram 1 and 2
     for i in range(0, len(global_hist_1.bins)):
         for j in range(0, len(global_hist_2.bins)):
@@ -349,7 +391,7 @@ def analyse_similarity_matrix(similarity_matrix: List[list]) -> float:
     max_rows = sim_mat_np.max(axis=1)
 
     matching_pairs_count = 0
-
+    # print("analyze sim matrix")
     for i in range(0, min(nb_rows, nb_col)):
         diag_i = similarity_matrix[i][i]
         max_c = max_columns[i]

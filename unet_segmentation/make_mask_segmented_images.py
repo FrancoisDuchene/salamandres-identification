@@ -1,6 +1,18 @@
 import cv2
 import os
+from enum import Enum
+
+import numpy as np
 from tqdm import tqdm
+
+
+class NormalizationType(Enum):
+    NONE = 0
+    MINMAX = 1
+    HIST_FLATTENING = 2
+
+
+NORMALIZATION_TYPE_SELECTED = NormalizationType.HIST_FLATTENING
 
 
 def make_new_images(inputs: list, masks: list, destination_dir: str):
@@ -13,13 +25,30 @@ def make_new_images(inputs: list, masks: list, destination_dir: str):
     """
     for i in tqdm(range(0, len(inputs))):
         input_path = inputs[i]
-        # input_filename = inputs[i].split("\\")[-1]
+        input_filename = input_path.split("\\")[-1]
         mask_path = masks[i]
-        mask_filename = masks[i].split("\\")[-1]
+        mask_filename = mask_path.split("\\")[-1]
 
-        img_input = cv2.imread(input_path)
-        img_mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-        img_segmented = cv2.bitwise_and(img_input, img_input, mask=img_mask)
+        img_input: np.ndarray = cv2.imread(input_path)
+        img_mask: np.ndarray = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+
+        img_final = img_input
+
+        if NORMALIZATION_TYPE_SELECTED == NormalizationType.MINMAX:     # DE LA BITE CA MARCHE PAS
+            height = img_input.shape[0]
+            width = img_input.shape[1]
+            norm_img = np.zeros((height, width))
+            img_final = cv2.normalize(img_input, norm_img, 0, 255, cv2.NORM_MINMAX)
+
+        # https://linuxtut.com/en/9c9fc6c0e9e8a9d05800/
+        elif NORMALIZATION_TYPE_SELECTED == NormalizationType.HIST_FLATTENING:
+            hsv = cv2.cvtColor(img_input, cv2.COLOR_BGR2HSV)    # convert to hsv color system
+            h, s, v = cv2.split(hsv)  # divided into each component
+            result = cv2.equalizeHist(v)
+            hsv = cv2.merge((h, s, result))
+            img_final = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+        img_segmented = cv2.bitwise_and(img_final, img_final, mask=img_mask)
         cv2.imwrite(os.path.join(destination_dir, mask_filename), img_segmented)
 
 
