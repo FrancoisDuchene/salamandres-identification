@@ -30,7 +30,7 @@ def test_color_seg():
 def color_segmentation(inputs: list):
     color_space = "lab"
     channels = "12"
-    num_clusters = 3
+    num_clusters = 2
     width = 1024    # un bon compromis vu que les images N&B ne prennent pas beaucoup de place
     for image in tqdm(inputs):
         cs.main(image=image, width=width, color_space=color_space, channels=channels,
@@ -40,7 +40,7 @@ def color_segmentation(inputs: list):
 
 if __name__ == '__main__':
     # test_color_seg()
-    source_dir = os.path.join(os.getcwd(), "unet_segmentation", "segmented_images_trainset")
+    source_dir = os.path.join(os.getcwd(), "unet_segmentation", "segmented_images_trainset_normalized_histflat")
     inputs_paths = []
     print("Loading Dataset")
     for file in tqdm(os.listdir(source_dir)):

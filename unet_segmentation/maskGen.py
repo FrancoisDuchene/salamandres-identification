@@ -11,7 +11,7 @@ import via_project
 from tqdm import tqdm
 
 
-def generate_masks(json_path: str, source_folder: str, output_folder: str):
+def generate_masks(json_path: str, source_folder: str, output_folder: str, use_data_augmentation: bool = True):
     count = 0  # Count of total images saved
 
     # Read JSON file
@@ -55,12 +55,13 @@ def generate_masks(json_path: str, source_folder: str, output_folder: str):
 
             exif = image._getexif()
 
-            if exif[orientation] == 3:
-                image = image.rotate(180, expand=True)
-            elif exif[orientation] == 6:
-                image = image.rotate(270, expand=True)
-            elif exif[orientation] == 8:
-                image = image.rotate(90, expand=True)
+            if exif is not None:
+                if exif[orientation] == 3:
+                    image = image.rotate(180, expand=True)
+                elif exif[orientation] == 6:
+                    image = image.rotate(270, expand=True)
+                elif exif[orientation] == 8:
+                    image = image.rotate(90, expand=True)
 
             image.save(img_path)
             image.close()
@@ -96,8 +97,6 @@ def generate_masks(json_path: str, source_folder: str, output_folder: str):
         # Saving all masks
         mask = mask[0:height, 0:width]
         cv2.imwrite(mask_path + ".png", mask)
-
-        original_img = cv2.imread(img_path)
 
         def make_rotations():
             mask_90 = cv2.rotate(mask, cv2.cv2.ROTATE_90_CLOCKWISE)
@@ -155,9 +154,11 @@ def generate_masks(json_path: str, source_folder: str, output_folder: str):
             cv2.imwrite(mask_path + "__flipY.png", mask_flip_vertical)
             cv2.imwrite(mask_path + "__flipXY.png", mask_flip_both)
 
-        make_zoom()
-        make_rotations()
-        make_flip()
+        if use_data_augmentation:
+            original_img = cv2.imread(img_path)
+            make_zoom()
+            make_rotations()
+            make_flip()
 
     print("Images saved:", count)
 
@@ -215,17 +216,58 @@ def generate_masks_for_not_salam_pictures(source_folder: str, output_folder: str
         cv2.imwrite(mask_path, mask)
 
 
-
-
 if __name__ == '__main__':
-    print("Generating masks")
-    generate_masks(
-        json_path=os.path.join(os.getcwd(), "via_project_salamandres.json"),
-        source_folder=os.path.join(os.getcwd(), "images"),
-        output_folder=os.path.join(os.getcwd(), "images_ready")
-    )
-    print("Generating non-target masks")
-    generate_masks_for_not_salam_pictures(
-        source_folder=os.path.join(os.getcwd(), "images_not_salam"),
-        output_folder=os.path.join(os.getcwd(), "images_ready")
-    )
+    GENERATE_NOT_SALAM_PICTURES = True
+    GENERATE_FROM_IMAGES_FOLDER = True
+    GENERATE_RHETO_PROJECTS = True
+    USE_DATA_AUGMENTATION = False
+    if GENERATE_FROM_IMAGES_FOLDER:
+        print("Generating masks")
+        generate_masks(
+            json_path=os.path.join(os.getcwd(), "via_project_salamandres.json"),
+            source_folder=os.path.join(os.getcwd(), "images"),
+            output_folder=os.path.join(os.getcwd(), "images_ready"),
+            use_data_augmentation=USE_DATA_AUGMENTATION
+        )
+    if GENERATE_NOT_SALAM_PICTURES:
+        print("Generating non-target masks")
+        generate_masks_for_not_salam_pictures(
+            source_folder=os.path.join(os.getcwd(), "images_not_salam"),
+            output_folder=os.path.join(os.getcwd(), "images_ready")
+        )
+    if GENERATE_RHETO_PROJECTS:
+        print("Generating masks")
+        # alexander
+        generate_masks(
+            json_path=os.path.join(os.getcwd(), "projets_rhetos", "via_project_rheto_alexander_clean.json"),
+            source_folder=os.path.join(os.getcwd(), "projets_rhetos", "Alexander"),
+            output_folder=os.path.join(os.getcwd(), "images_ready"),
+            use_data_augmentation=USE_DATA_AUGMENTATION
+        )
+        # clement
+        # generate_masks(
+        #     json_path=os.path.join(os.getcwd(), "projets_rhetos", "via_project_rheto_clement_clean.json"),
+        #     source_folder=os.path.join(os.getcwd(), "projets_rhetos", "Clement"),
+        #     output_folder=os.path.join(os.getcwd(), "images_ready")
+        # )
+        # david
+        generate_masks(
+            json_path=os.path.join(os.getcwd(), "projets_rhetos", "via_project_rheto_david_clean.json"),
+            source_folder=os.path.join(os.getcwd(), "projets_rhetos", "david"),
+            output_folder=os.path.join(os.getcwd(), "images_ready"),
+            use_data_augmentation=USE_DATA_AUGMENTATION
+        )
+        # justin
+        generate_masks(
+            json_path=os.path.join(os.getcwd(), "projets_rhetos", "via_project_rheto_justin_clean.json"),
+            source_folder=os.path.join(os.getcwd(), "projets_rhetos", "Justin"),
+            output_folder=os.path.join(os.getcwd(), "images_ready"),
+            use_data_augmentation=USE_DATA_AUGMENTATION
+        )
+        # romane
+        generate_masks(
+            json_path=os.path.join(os.getcwd(), "projets_rhetos", "via_project_rheto_romane_clean.json"),
+            source_folder=os.path.join(os.getcwd(), "projets_rhetos", "Romane"),
+            output_folder=os.path.join(os.getcwd(), "images_ready"),
+            use_data_augmentation=USE_DATA_AUGMENTATION
+        )

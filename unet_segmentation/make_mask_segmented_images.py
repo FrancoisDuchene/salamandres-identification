@@ -34,7 +34,7 @@ def make_new_images(inputs: list, masks: list, destination_dir: str):
 
         img_final = img_input
 
-        if NORMALIZATION_TYPE_SELECTED == NormalizationType.MINMAX:     # DE LA BITE CA MARCHE PAS
+        if NORMALIZATION_TYPE_SELECTED == NormalizationType.MINMAX:     # DOES NOT WORK
             height = img_input.shape[0]
             width = img_input.shape[1]
             norm_img = np.zeros((height, width))
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             sample_path = os.path.join(source_dir, folder)
             contents_dir_images = sorted(os.listdir(os.path.join(sample_path, "images")))
             contents_dir_masks = sorted(os.listdir(os.path.join(sample_path, "masks")))
-            if len(os.listdir(os.path.join(sample_path, "images"))) == 1:
+            if folder.startswith("notsalam_"):
                 # print("skipping ", os.listdir(os.path.join(sample_path, "images"))[0])
                 continue
 

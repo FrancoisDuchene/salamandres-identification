@@ -10,7 +10,10 @@ import scipy.stats as spstats
 import numpy as np
 from tqdm import tqdm
 
+import dilatation_erosion
+
 CC_CONNECTIVITY = 8
+DILATATION_EROSION_KERNEL_SIZE = 2
 
 
 class ConnectedComponentsData:
@@ -46,7 +49,13 @@ class ConnectedComponentsData:
 
     def get_area_avg(self):
         area_np = self.get_areas()
-        return area_np.mean()
+        if len(area_np) == 0:
+            return 0
+        mean = np.nanmean(area_np)
+        if np.isnan(mean):
+            return 0
+        else:
+            return mean
 
     def get_area_std(self):
         area_np = self.get_areas()
@@ -232,7 +241,7 @@ def draw_info_cc(image_bgr: np.ndarray, path, cc_n, x, y, w, h, cx, cy):
     return img_cpy
 
 
-def analyse_cc(image_paths: list) -> CCDataSet:
+def analyse_cc(image_paths: list, use_erosion_dilatation_opening: bool = False) -> CCDataSet:
     """
     Analyze the connected components for all the images contained in image_paths
     :param image_paths: a list containing paths to images that needs to be analyzed
@@ -242,13 +251,13 @@ def analyse_cc(image_paths: list) -> CCDataSet:
     must_draw = False
     for path in tqdm(image_paths):
         image = cv2.imread(path)
-        data = analyse_one_cc(image, path, must_draw)
+        data = analyse_one_cc(image, path, must_draw=must_draw, use_erosion_dilatation_opening=use_erosion_dilatation_opening)
         data_set.add(data)
 
     return data_set
 
 
-def analyse_one_cc(image: np.ndarray, path: str, must_draw: bool = False) -> ConnectedComponentsData:
+def analyse_one_cc(image: np.ndarray, path: str, must_draw: bool = False, use_erosion_dilatation_opening: bool = False) -> ConnectedComponentsData:
     """
     Analyze the connected components for one image
     :param image: a cv2 loaded image
@@ -258,7 +267,11 @@ def analyse_one_cc(image: np.ndarray, path: str, must_draw: bool = False) -> Con
     :return: a connectedComponentData object describing the connected components
     """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    cc_data = ConnectedComponentsData(image=gray, image_name=path)
+    if use_erosion_dilatation_opening:
+        dilated: np.ndarray = dilatation_erosion.opening(gray, kernel_size=DILATATION_EROSION_KERNEL_SIZE)
+        cc_data = ConnectedComponentsData(image=dilated, image_name=path)
+    else:
+        cc_data = ConnectedComponentsData(image=gray, image_name=path)
 
     # if must_draw:
     #     for cc_n in range(0, cc_data.nb_labels()):
@@ -268,10 +281,29 @@ def analyse_one_cc(image: np.ndarray, path: str, must_draw: bool = False) -> Con
     return cc_data
 
 
-def plotting_frequency(unique, count):
-    plt.plot(unique, count)
-    plt.xlabel("Unique values")
-    plt.ylabel("Frequency")
+def plotting_frequency(unique, count, plot_color='orange', show_plot=True):
+    plt.figure(figsize=(10, 7), dpi=200)
+    plt.plot(unique, count, color=plot_color)
+    plt.xlabel("Unique values", fontsize='x-large')
+    plt.ylabel("Frequency", fontsize='x-large')
+    plt.xlim(left=-10, right=100)
+    if show_plot:
+        plt.show()
+
+
+def plotting_frequency_4(unique_1, count_1, unique_2, count_2, unique_3, count_3, unique_4, count_4):
+    plt.figure(figsize=(7, 10), dpi=200)
+    plt.plot(unique_1, count_1, color="orange")
+    plt.plot(unique_2, count_2, color="green")
+    plt.plot(unique_3, count_3, color="red")
+    plt.plot(unique_4, count_4, color="blue")
+    plt.legend(["norm hist - nb labels = 2", "norm hist - nb labels = 3", "pas norm - nb labels = 2",
+                "pas norm - nb labels = 3"])
+    plt.xlabel("Aire des taches (pixel)", fontsize='x-large')
+    plt.ylabel("Fréquence", fontsize='x-large')
+    plt.xlim(left=-5, right=250)
+    plt.title("Aire des taches avec {}-connexité\nDataset complet - Avec Érosion-Dilatation".format(CC_CONNECTIVITY),
+              size="xx-large")
     plt.show()
 
 
@@ -279,22 +311,56 @@ def print_stat_moments(areas: np.ndarray):
     print("Stats about area")
     print("mean: ", round(np.mean(areas), ndigits=6))
     print("std: ", round(np.std(areas), ndigits=6))
-    print("median: ", round(np.median(areas), ndigits=6))
+    print("median: ", int(round(np.median(areas), ndigits=6)))
     print("skewness (corr bias): ", round(spstats.skew(areas, bias=False), ndigits=6))
     print("kurtosis (fisher + corr bias): ", round(spstats.kurtosis(areas, fisher=True, bias=False), ndigits=6))
+    print("nb areas: ", len(areas))
 
 
-if __name__ == "__main__":
-    source_dir = os.path.join(os.getcwd(), "trainset_color_segmented")
+def make_image_list(source_dir: str) -> list:
     images_paths = []
     for file_path in tqdm(os.listdir(source_dir)):
         if not os.path.isdir(file_path):
             images_paths.append(os.path.join(source_dir, file_path))
+    return images_paths
 
-    cc_data_set = analyse_cc(images_paths)
-    unique, count, areas_np = cc_data_set.compute_frequency()
-    plotting_frequency(unique, count)
-    print_stat_moments(areas_np)
+
+def aug(elem1: float, elem2: float):
+    dif_abs = elem2 - elem1
+    div = dif_abs/elem1
+    return 100*div
+
+
+if __name__ == "__main__":
+    images_paths_histflat_n2_all = make_image_list(os.path.join(os.getcwd(), "trainset_color_segmented_normalized_histflat_numclusters_2_all_images"))
+    images_paths_histflat_n3_all = make_image_list(os.path.join(os.getcwd(), "trainset_color_segmented_normalized_histflat_numclusters_3_all_images"))
+    images_paths_nonorm_n2_all = make_image_list(os.path.join(os.getcwd(), "trainset_color_segmented_not_normalized_numclusters_2_all_images"))
+    images_paths_nonorm_n3_all = make_image_list(os.path.join(os.getcwd(), "trainset_color_segmented_not_normalized_numclusters_3_all_images"))
+
+    plt.figure(figsize=(10, 7), dpi=200)
+    # 1
+    cc_data_set = analyse_cc(images_paths_histflat_n2_all, use_erosion_dilatation_opening=True)
+    unique_1, count_1, areas_np_1 = cc_data_set.compute_frequency()
+    plotting_frequency(unique_1, count_1, show_plot=True)
+    print_stat_moments(areas_np_1)
+    # 2
+    cc_data_set = analyse_cc(images_paths_histflat_n3_all, use_erosion_dilatation_opening=True)
+    unique_2, count_2, areas_np_2 = cc_data_set.compute_frequency()
+    # plotting_frequency(unique_2, count_2, plot_color="green", show_plot=True)
+    print_stat_moments(areas_np_2)
+    # 3
+    cc_data_set = analyse_cc(images_paths_nonorm_n2_all, use_erosion_dilatation_opening=True)
+    unique_3, count_3, areas_np_3 = cc_data_set.compute_frequency()
+    # plotting_frequency(unique_3, count_3, plot_color="red", show_plot=True)
+    print_stat_moments(areas_np_3)
+    # 4
+    cc_data_set = analyse_cc(images_paths_nonorm_n3_all, use_erosion_dilatation_opening=True)
+    unique_4, count_4, areas_np_4 = cc_data_set.compute_frequency()
+    # plotting_frequency(unique_4, count_4, plot_color="blue")
+    print_stat_moments(areas_np_4)
+
+    plotting_frequency_4(unique_1, count_1, unique_2, count_2, unique_3, count_3, unique_4, count_4)
+
     # json = cc_data_set.to_json()
     # jsonFile = open("cc_data_set.json", "w")
     # jsonFile.write(json)

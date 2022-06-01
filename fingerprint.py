@@ -8,6 +8,8 @@ import os
 
 from tqdm import tqdm
 
+import connected_components
+
 HISTOGRAM_ANGLE_REGION = (math.pi / 4)  # 45°
 HISTOGRAM_NB_ANGLE_REGION = 8
 HISTOGRAM_NB_INTERNAL_CIRCLE = 1
@@ -115,7 +117,9 @@ class PolarHistogram:
     def histogram_radius(points: np.ndarray):
         m = points.shape[0]
 
-        coef = (1 / (2 * np.square(m)))
+        # coef = (1 / (2 * np.square(m)))
+        coef = (1 / np.square(m))   # true formula
+        # coef = (1 / np.sqrt(pow(m, 5)))  # m^(2,5) = m^(5/2)
 
         distance_list = []  # list containing the distances between points, used for optimization purposes
         doublesum = 0
@@ -414,25 +418,47 @@ def make_polar_histogram(points: np.ndarray, name: str = "") -> PolarHistogram:
     return polar_histogram
 
 
+def draw_test(image_path: str, output_name: str):
+    img = cv2.imread(image_path)
+    ccdata: connected_components.ConnectedComponentsData = connected_components.analyse_one_cc(img, image_path)
+    histogram = make_polar_histogram(ccdata.centroids, name=image_path)
+
+    new_image = np.zeros(shape=img.shape, dtype=np.uint8)
+    col = 0
+    for p in ccdata.centroids:
+        cx = int(np.round(p[0]))
+        cy = int(np.round(p[1]))
+        cv2.circle(new_image, (cx, cy), 5, (0, 0, 255), -1)
+        cv2.circle(new_image, (cx, cy), int(np.round(histogram.radius)), (0, 255 - col, 255), 1)
+        col += 3
+    cv2.imshow("radius with points", new_image)
+    cv2.imshow("original", img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    cv2.imwrite(filename=(output_name[:-4] + "_rayon" + str(np.round(histogram.radius)) + ".png"), img=new_image)
+
+
 if __name__ == "__main__":
-    R = np.array([[1, 1], [3, 2], [3, 1], [2, 3], [2, 2], [4, 4], [5, 7], [2, 5]])
-    T = np.array([[2, 1], [4, 2], [4, 1], [3, 3], [3, 2], [5, 4], [6, 7], [3, 5]])
-    Z = np.array([[0, 0], [14, 22], [5, 8], [17, 23], [13, 0.2], [0.5, 0.4], [2, 9], [9, 9]])
-    W = np.array([[1, 1], [3, 2], [3, 1], [2, 3], [2, 2], [4, 4], [5, 7], [3, 4]])
-
-    histogram1 = make_polar_histogram(R)
-    histogram2 = make_polar_histogram(T)
-    histogram3 = make_polar_histogram(Z)
-    histogram4 = make_polar_histogram(W)
-
-    sim_matrix_1 = np.array(make_similarity_matrix(histogram1, histogram2))
-    sim_matrix_2 = np.array(make_similarity_matrix(histogram1, histogram1))
-    sim_matrix_3 = np.array(make_similarity_matrix(histogram1, histogram3))
-
-    proba_sim_1 = compare_histograms(histogram1, histogram2)
-    proba_sim_2 = compare_histograms(histogram1, histogram1)
-    proba_sim_3 = compare_histograms(histogram1, histogram3)
-    proba_sim_4 = compare_histograms(histogram1, histogram4)
+    draw_test(os.path.join(os.getcwd(), "trainset_color_segmented_normalized_histflat_numclusters_2_all_images", "mandeldemo_00007217.png"),
+              os.path.join(os.getcwd(), "trainset_color_segmented_results", "mandeldemo_00007217_histrad_ncarre.png"))
+    # R = np.array([[1, 1], [3, 2], [3, 1], [2, 3], [2, 2], [4, 4], [5, 7], [2, 5]])
+    # T = np.array([[2, 1], [4, 2], [4, 1], [3, 3], [3, 2], [5, 4], [6, 7], [3, 5]])
+    # Z = np.array([[0, 0], [14, 22], [5, 8], [17, 23], [13, 0.2], [0.5, 0.4], [2, 9], [9, 9]])
+    # W = np.array([[1, 1], [3, 2], [3, 1], [2, 3], [2, 2], [4, 4], [5, 7], [3, 4]])
+    #
+    # histogram1 = make_polar_histogram(R)
+    # histogram2 = make_polar_histogram(T)
+    # histogram3 = make_polar_histogram(Z)
+    # histogram4 = make_polar_histogram(W)
+    #
+    # sim_matrix_1 = np.array(make_similarity_matrix(histogram1, histogram2))
+    # sim_matrix_2 = np.array(make_similarity_matrix(histogram1, histogram1))
+    # sim_matrix_3 = np.array(make_similarity_matrix(histogram1, histogram3))
+    #
+    # proba_sim_1 = compare_histograms(histogram1, histogram2)
+    # proba_sim_2 = compare_histograms(histogram1, histogram1)
+    # proba_sim_3 = compare_histograms(histogram1, histogram3)
+    # proba_sim_4 = compare_histograms(histogram1, histogram4)
 
     # image = np.zeros(shape=[800, 600, 3], dtype=np.uint8)
     #

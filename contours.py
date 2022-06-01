@@ -20,13 +20,12 @@ class ContoursData:
         self.hierarchy = hierarchy
 
 
-def create_histograms_from_contours(image_filepath: str):
+def create_histograms_from_contours(image: np.ndarray, image_filepath: str):
     """
     create histograms for the given image path
     :param image:
     :return:
     """
-    image: np.ndarray = cv2.imread(image_filepath)
     image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # apply a threshold just to be sure
     ret, thresh = cv2.threshold(image_gray, 127, 255, cv2.THRESH_BINARY)
