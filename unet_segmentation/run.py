@@ -30,11 +30,11 @@ if __name__ == '__main__':
     # maskGen.generate_masks_v3()
 
     params = {
-        "img_size": (512, 512),
+        "img_size": (256, 256),
         "num_classes": 2,
-        "batch_size": 4,
-        "EPOCHS": 15,
-        "step_per_epoch": 400,
+        "batch_size": 15,
+        "EPOCHS": 5,
+        "step_per_epoch": 200,
         "learning_rate": 0.001
     }
 
@@ -86,27 +86,29 @@ if __name__ == '__main__':
 
     print("Creating the model")
     model: keras.Model = um.make_model(img_size=params["img_size"], num_classes=params["num_classes"])
-    # model.summary()
-    # exit(0)
+
     print("Creating the validation set")
-    train_gen, val_gen, val_input_img_paths, val_target_img_paths, train_input_img_paths, train_target_img_paths = \
+    train_gen, val_gen, val_input_img_paths, val_target_img_paths, train_input_img_paths, train_target_img_paths, \
+    test_gen, test_input_img_paths, test_target_img_paths = \
         um.make_validation_set(input_img_paths, target_img_paths, params["batch_size"], params["img_size"])
 
     # Configure the model for training.
     # We use the "sparse" version of categorical_crossentropy
     # because our target data is integers.
-    loss_function = exl.jaccard_distance
-    loss_function_name = "jaccard"
-    # loss_function = losses.BinaryCrossentropy
+    #loss_function = exl.jaccard_distance
+    #loss_function_name = "jaccard"
+    loss_function = losses.SparseCategoricalCrossentropy()
+    loss_function_name = "sparse_cat_crossentr"
     optimizer = optimizers.Adam(learning_rate=params["learning_rate"])
     model.compile(optimizer=optimizer,
                   loss=loss_function,#"sparse_categorical_crossentropy",
                   run_eagerly=False,
                   metrics=[
-                      # kmetrics.MeanIoU(num_classes=2),
+                      #kmetrics.MeanIoU(num_classes=2),
                       "accuracy",
-                      exm.iou,
-                      exm.iou_thresholded
+                      exm.jaccard_coef
+                      # exm.iou,
+                      # exm.iou_thresholded
                   ])
 
     # model.summary()
@@ -125,19 +127,16 @@ if __name__ == '__main__':
                         steps_per_epoch=params["step_per_epoch"],
                         validation_data=val_gen, callbacks=callbacks)
 
-    # Generate predictions for all images in the validation set
+    # Generate predictions for all images in the test set
 
-    val_gen = sal.DataGenerator(batch_size=params["batch_size"], img_size=params["img_size"],
-                                input_img_paths=val_input_img_paths,
-                                target_img_paths=val_target_img_paths)
-    val_preds = model.predict(val_gen)
+    test_preds = model.predict(test_gen)
 
     def display_mask(i, old_model=False):
         """Quick utility to display a model's prediction."""
         if old_model:
-            img_d = array_to_img(val_preds[i])
+            img_d = array_to_img(test_preds[i])
         else:
-            mask_d = np.argmax(val_preds[i], axis=-1)
+            mask_d = np.argmax(test_preds[i], axis=-1)
             mask_d = np.expand_dims(mask_d, axis=-1)
             img_d = PIL.ImageOps.autocontrast(array_to_img(mask_d))
         img_d.show()
@@ -146,15 +145,15 @@ if __name__ == '__main__':
     # Display results for validation image #0
     i = 0
 
-    img = PIL.ImageOps.autocontrast(load_img(val_target_img_paths[i]))
+    img = PIL.ImageOps.autocontrast(load_img(test_target_img_paths[i]))
     img.show()
 
     display_mask(i)
 
     def display_result(index: int, old_model=False):
-        img_source = load_img(val_input_img_paths[index])
+        img_source = load_img(test_input_img_paths[index])
         img_source.show()
-        img_target = load_img(val_target_img_paths[index])
+        img_target = load_img(test_target_img_paths[index])
         img_target.show()
         img_mask = display_mask(index, old_model)
         # we need to resize the mask to its original size
@@ -165,19 +164,19 @@ if __name__ == '__main__':
         img_mask.show()
         img_mask_path = os.path.join(
             output_predictions_images_dir,
-            val_input_img_paths[index].split("\\")[-1][:-4] + "_pred.png")
+            test_input_img_paths[index].split("\\")[-1][:-4] + "_pred.png")
         img_mask.save(img_mask_path)
         img_mask.close()
 
         img_mask_cv = cv2.imread(img_mask_path, cv2.IMREAD_GRAYSCALE)
-        img_source_cv = cv2.imread(val_input_img_paths[index])
+        img_source_cv = cv2.imread(test_input_img_paths[index])
         img_mask_cv = cv2.bitwise_and(img_source_cv, img_source_cv, mask=img_mask_cv)
         cv2.imwrite(img_path, img_mask_cv)
 
-    model.save(os.path.join(os.getcwd(), "model_{}_loss_{}_lr_{}_{}_samples_{}_epochs_{}_stepsperepoch_adam"
+    model.save(os.path.join(os.getcwd(), "model_{}_loss_{}_lr_{}_{}_samples_{}_epochs_{}_spe_adam"
                             .format(model.name, loss_function_name, params["learning_rate"], len(input_img_paths),
                                     params["EPOCHS"], params["step_per_epoch"])))
-    history_xlsx_file_path = "results_{}_loss_{}_lr_{}_totsamples{}_epo{}_{}_stepsperepoch_batchsize{}_{}x{}.xlsx"\
+    history_xlsx_file_path = "results_{}_loss_{}_lr_{}_totsamples{}_epo{}_{}_spe_batchsize{}_{}x{}.xlsx"\
         .format(model.name, loss_function_name, params["learning_rate"], len(input_img_paths), params["EPOCHS"],
                 params["step_per_epoch"], params["batch_size"], params["img_size"][0], params["img_size"][1])
     hist_df = pd.DataFrame(history.history)

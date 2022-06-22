@@ -18,12 +18,14 @@ import pandas as pd
 PRINT_SYSTEM_OUT = True     # if set to true, the script will write on system out
 
 USE_MULTITHREADING = True
-SIMILARITY_THRESHOLD = 0.0
+SIMILARITY_THRESHOLD = 0
 #DILATATION_EROSION_KERNEL_SIZE = 1
 USE_EROSION_DILATATION = True
 
-PERFORMANCE_TEST_TABLE_FILENAME = os.path.join(os.getcwd(), "performances_tables", "perf_total.csv")
-SOURCE_COLOR_SEGMENTED_IMAGES_FOLDER = os.path.join(os.getcwd(), "trainset_color_segmented_normalized_histflat_numclusters_2_all_images")
+SAFETY_CHECK_FOR_DUPLICATE_IN_PERFORMANCE_TABLE_DUPLICATES = True
+
+PERFORMANCE_TEST_TABLE_FILENAME = os.path.join(os.getcwd(), "performances_tables", "perf_dummy.csv")
+SOURCE_COLOR_SEGMENTED_IMAGES_FOLDER = os.path.join(os.getcwd(), "trainset_color_segmented_normalized_histflat_numclusters_2_perf_dummy")
 
 
 class ConfusionMatrix:
@@ -117,6 +119,10 @@ class SalamImage:
         else:
             return "SalamImage of individual {}, imagepath: {}, hist: {}" \
                 .format(self.individual_id, os.sep + "..." + self.image_path.split(os.sep)[-1], self.global_histogram)
+
+    def __repr__(self):
+        return "SalamImage of individual {}, imagepath: {}" \
+            .format(self.individual_id, os.sep + "..." + self.image_path.split(os.sep)[-1])
 
 
 class HistogramComparisonResult:
@@ -292,10 +298,28 @@ def make_true_difference_set(salam_images: List[SalamImage], df: pandas.DataFram
         elem_salam_image: SalamImage = find_histogram_by_filename(salam_images,
                                                                   prefix_name_set + df.iloc[elem][0])
         individual_id = df.iloc[elem][1]
+        # if the same file is present twice in the dataframe, there will be duplicates in the result.
+        if SAFETY_CHECK_FOR_DUPLICATE_IN_PERFORMANCE_TABLE_DUPLICATES:
+            is_individual_id_already_present = False
+            for pair in salam_images_false_set:
+                if pair[0].individual_id == individual_id:
+                    is_individual_id_already_present = True
+                    break
+            if is_individual_id_already_present:
+                continue
         df_image_names = df.loc[df["salam_id"] > individual_id]
         for index, row in df_image_names.iterrows():
+            if SAFETY_CHECK_FOR_DUPLICATE_IN_PERFORMANCE_TABLE_DUPLICATES:
+                is_individual_id_already_present = False
+                for pair in salam_images_false_set:
+                    if pair[0].individual_id == individual_id and pair[1].individual_id == row[1]:
+                        is_individual_id_already_present = True
+                        break
+                if is_individual_id_already_present:
+                    continue
             salam_image: SalamImage = find_histogram_by_filename(salam_images, prefix_name_set + row[0])
             salam_image.individual_id = row[1]
+
             salam_images_false_set.append([elem_salam_image, salam_image])
     return salam_images_false_set
 
@@ -323,6 +347,7 @@ def performance_test(salam_images: List[SalamImage]) -> Tuple[
     salam_images_true_different_set: List[List[SalamImage]] = make_true_difference_set(salam_images, df)
     # We now compute the probabilities of similarity between each histogram (here each photo) for each individual
     true_similar_set_comparison_results: List[IndividualComparisonResult] = []
+    false_positive_pairs_list: List[Tuple[List[SalamImage], HistogramComparisonResult]] = []
     # STATS
     avg_similarity_probability_true_similar = 0.0
     avg_similarity_probability_true_different = 0.0
@@ -401,12 +426,14 @@ def performance_test(salam_images: List[SalamImage]) -> Tuple[
         alpha_error = monitor_threads_compare.alpha_error
         avg_similarity_probability_true_different = monitor_threads_compare.avg_similarity_probability_true_different
         true_different_set_comparison_results = monitor_threads_compare.true_different_set_comparison_results
+        false_positive_pairs_list = monitor_threads_compare.false_positive_pairs_list
     else:
         ress = compare_differents(salam_images_true_different_set)
         true_different = ress["true_different"]
         alpha_error = ress["alpha_error"]
         avg_similarity_probability_true_different = ress["avg_similarity_probability_true_different"]
         true_different_set_comparison_results = ress["true_different_set_comparison_results"]
+        false_positive_pairs_list = ress["false_positive_pairs_list"]
 
     avg_similarity_probability_true_different /= len(true_different_set_comparison_results)
     avg_similarity_probability_total = \
@@ -418,6 +445,7 @@ def performance_test(salam_images: List[SalamImage]) -> Tuple[
            {"avg_proba_true_similar": avg_similarity_probability_true_similar,
             "avg_proba_true_different": avg_similarity_probability_true_different,
             "avg_proba_total": avg_similarity_probability_total,
+            "false_positive_pairs_list": false_positive_pairs_list,
             "confusion_matrix": confusion_matrix
             }
 
@@ -451,6 +479,7 @@ class ThreadCompareDifferent:
         self.alpha_error = 0
         self.avg_similarity_probability_true_different = 0.0
         self.true_different_set_comparison_results: List[HistogramComparisonResult] = []
+        self.false_positive_pairs_list: List[Tuple[List[SalamImage], HistogramComparisonResult]] = []
 
     def compare_differents(self, salam_images_true_different_set: List[List[SalamImage]]):
         ress = compare_differents(salam_images_true_different_set)
@@ -461,6 +490,8 @@ class ThreadCompareDifferent:
         self.avg_similarity_probability_true_different += ress["avg_similarity_probability_true_different"]
         for hcr in ress["true_different_set_comparison_results"]:
             self.true_different_set_comparison_results.append(hcr)
+        for pair in ress["false_positive_pairs_list"]:
+            self.false_positive_pairs_list.append(pair)
         self.lock.release()
 
 
@@ -497,20 +528,23 @@ def compare_differents(salam_images_true_different_set: List[List[SalamImage]]):
     avg_similarity_probability_true_different = 0.0
     true_different = 0.0
     alpha_error = 0.0
+    false_positive_pairs_list: List[Tuple[List[SalamImage], HistogramComparisonResult]] = []
     true_different_set_comparison_results: List[HistogramComparisonResult] = []
     for pair in tqdm(salam_images_true_different_set, disable=not PRINT_SYSTEM_OUT):
         similarity_probability = fgp.compare_histograms(pair[0].global_histogram, pair[1].global_histogram)
         is_similar = True if similarity_probability > SIMILARITY_THRESHOLD else False
-        true_different_set_comparison_results.append(HistogramComparisonResult(pair[0], pair[1], similarity_probability,
-                                                                               is_similar))
+        new_hcr = HistogramComparisonResult(pair[0], pair[1], similarity_probability, is_similar)
+        true_different_set_comparison_results.append(new_hcr)
         if is_similar:
             alpha_error += 1
+            false_positive_pairs_list.append((pair, new_hcr))
         else:
             true_different += 1
         avg_similarity_probability_true_different += similarity_probability
     return {"true_different": true_different, "alpha_error": alpha_error,
             "avg_similarity_probability_true_different": avg_similarity_probability_true_different,
-            "true_different_set_comparison_results": true_different_set_comparison_results}
+            "true_different_set_comparison_results": true_different_set_comparison_results,
+            "false_positive_pairs_list": false_positive_pairs_list}
 
 
 def nb_histograms_true_similar(icr_list: List[IndividualComparisonResult]) -> int:

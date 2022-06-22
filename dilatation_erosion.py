@@ -20,9 +20,14 @@ def morph_shape(shape_type: int) -> int:
         return cv2.MORPH_RECT
 
 
-def build_kernel(erosion_size: int) -> Tuple[np.ndarray, int]:
+def compute_kernel_size(erosion_size: int) -> int:
     erosion_size = 2 * erosion_size + 1
     erosion_size = clip(erosion_size, 1, 21)
+    return erosion_size
+
+
+def build_kernel(erosion_size: int) -> Tuple[np.ndarray, int]:
+    erosion_size = compute_kernel_size(erosion_size)
     kernel = np.ones((2 * erosion_size + 1, 2 * erosion_size + 1), np.uint8)
     return kernel, erosion_size
 
@@ -86,9 +91,12 @@ def dilatation(image: np.ndarray, simple_dilate: bool = True, shape_type: int = 
 
 
 if __name__ == "__main__":
-    test_file_path = os.path.join(os.getcwd(), "trainset_color_segmented", "00000035.png")
+    filename = "andenne_a47.png"
+    filename_without_ext = filename.split(".")[0]
+    test_file_path = os.path.join(os.getcwd(), "trainset_color_segmented_normalized_histflat_numclusters_2_all_images", filename)
     test_file = cv2.imread(test_file_path)
-    kernel_size = 1     # 3
+    kernel_size = 3     # 5
+    real_kernel_size = compute_kernel_size(kernel_size)
     opened_file = opening(test_file, kernel_size)
     closed_file = closing(test_file, kernel_size)
     eroded_file = erosion(test_file, True, erosion_size=kernel_size)
@@ -101,3 +109,8 @@ if __name__ == "__main__":
     cv2.imshow("dilated", dilated_file)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    # cv2.imwrite("{}.png".format(filename_without_ext), test_file)
+    cv2.imwrite("{}_opened_{}.png".format(filename_without_ext,real_kernel_size), opened_file)
+    # cv2.imwrite("{}_closed.png".format(filename_without_ext), closed_file)
+    cv2.imwrite("{}_eroded_{}.png".format(filename_without_ext,real_kernel_size), eroded_file)
+    # cv2.imwrite("{}_dilated.png".format(filename_without_ext), dilated_file)

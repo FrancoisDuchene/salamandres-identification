@@ -13,7 +13,7 @@ from tqdm import tqdm
 import dilatation_erosion
 
 CC_CONNECTIVITY = 8
-DILATATION_EROSION_KERNEL_SIZE = 2
+DILATATION_EROSION_KERNEL_SIZE = 1
 
 
 class ConnectedComponentsData:

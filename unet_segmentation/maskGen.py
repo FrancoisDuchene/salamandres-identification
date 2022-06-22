@@ -220,7 +220,7 @@ if __name__ == '__main__':
     GENERATE_NOT_SALAM_PICTURES = True
     GENERATE_FROM_IMAGES_FOLDER = True
     GENERATE_RHETO_PROJECTS = True
-    USE_DATA_AUGMENTATION = False
+    USE_DATA_AUGMENTATION = True
     if GENERATE_FROM_IMAGES_FOLDER:
         print("Generating masks")
         generate_masks(
